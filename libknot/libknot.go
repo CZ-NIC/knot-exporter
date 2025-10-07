@@ -58,6 +58,7 @@ int knot_ctl_connect_wrapper(knot_ctl_t *ctl, const char *path) {
 }
 
 void knot_ctl_close_wrapper(knot_ctl_t *ctl) {
+    knot_ctl_send(ctl, KNOT_CTL_TYPE_END, NULL);
     knot_ctl_close(ctl);
 }
 
