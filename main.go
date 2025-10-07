@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fgouteroux/knot-exporter/libknot"
+	"github.com/CZ-NIC/knot-exporter/libknot"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )

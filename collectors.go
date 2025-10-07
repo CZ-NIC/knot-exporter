@@ -11,7 +11,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/fgouteroux/knot-exporter/libknot"
+	"github.com/CZ-NIC/knot-exporter/libknot"
 )
 
 // Metric descriptors
