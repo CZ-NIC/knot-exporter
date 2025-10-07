@@ -1,4 +1,4 @@
-module github.com/fgouteroux/knot-exporter
+module github.com/CZ-NIC/knot-exporter
 
 go 1.23.9
 
