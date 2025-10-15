@@ -70,7 +70,6 @@ Common options:
   -knot-socket-path /run/knot/knot.sock \
   -knot-socket-timeout 5000 \
   -zone-timers \
-  -zone-roles \
   -debug
 ```
 
@@ -86,7 +85,6 @@ Common options:
 - `-no-zone-status`: Disable zone status collection
 - `-no-zone-serial`: Disable zone serial collection
 - `-zone-timers`: Enable SOA timer collection
-- `-zone-roles`: Enable zone role collection
 - `-debug`: Enable debug logging
 - `-version`: Show version information
 
@@ -138,7 +136,6 @@ ExecStart=/usr/local/bin/knot-exporter \
     -web-listen-addr 0.0.0.0 \
     -web-listen-port 9433 \
     -zone-timers \
-    -zone-roles
 Restart=always
 RestartSec=5
 
