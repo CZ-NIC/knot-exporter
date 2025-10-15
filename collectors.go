@@ -16,21 +16,21 @@ import (
 
 // Metric descriptors
 var (
-	memoryUsageDesc = prometheus.NewDesc(
+	memoryUsageDesc = makeDescPair(
 		"knot_memory_usage_bytes",
 		"Memory usage of Knot DNS processes",
 		[]string{"pid"},
 		nil,
 	)
 
-	zoneStatusDesc = prometheus.NewDesc(
+	zoneStatusDesc = makeDescPair(
 		"knot_zone_status",
 		"Zone status from Knot DNS",
 		[]string{"zone", "role"},
 		nil,
 	)
 
-	zoneSerialDesc = prometheus.NewDesc(
+	zoneSerialDesc = makeDescPair(
 		"knot_zone_serial",
 		"Zone serial number from Knot DNS",
 		[]string{"zone"},
@@ -38,21 +38,21 @@ var (
 	)
 
 	// Timer-specific metrics
-	zoneRefreshDesc = prometheus.NewDesc(
+	zoneRefreshDesc = makeDescPair(
 		"knot_zone_refresh_seconds",
 		"Zone SOA refresh timer",
 		[]string{"zone"},
 		nil,
 	)
 
-	zoneRetryDesc = prometheus.NewDesc(
+	zoneRetryDesc = makeDescPair(
 		"knot_zone_retry_seconds",
 		"Zone SOA retry timer",
 		[]string{"zone"},
 		nil,
 	)
 
-	zoneExpirationDesc = prometheus.NewDesc(
+	zoneExpirationDesc = makeDescPair(
 		"knot_zone_expiration_seconds",
 		"Zone SOA expiration timer",
 		[]string{"zone"},
@@ -60,14 +60,14 @@ var (
 	)
 
 	// Zone status timer metrics (from zone-status command)
-	zoneStatusExpirationDesc = prometheus.NewDesc(
+	zoneStatusExpirationDesc = makeDescPair(
 		"knot_zone_status_expiration_seconds",
 		"Zone expiration timer from zone-status",
 		[]string{"zone"},
 		nil,
 	)
 
-	zoneStatusRefreshDesc = prometheus.NewDesc(
+	zoneStatusRefreshDesc = makeDescPair(
 		"knot_zone_status_refresh_seconds",
 		"Zone refresh timer from zone-status",
 		[]string{"zone"},
@@ -83,12 +83,20 @@ var (
 	)
 )
 
+func makeDescPair(fqName, help string, variableLabels []string, constLabels prometheus.Labels) [2]*prometheus.Desc {
+	return [2]*prometheus.Desc{
+		prometheus.NewDesc(fqName, help, variableLabels, constLabels),
+		prometheus.NewDesc(fqName+"_total", help, variableLabels, constLabels),
+	}
+}
+
 // Dynamic metric descriptors for global stats and zone stats - will be created on demand
+// 0th = base metric (gauge), 1st = %s_total metric (counter)
 var (
-	globalStatsDescriptors = make(map[string]*prometheus.Desc)
+	globalStatsDescriptors = make(map[string][2]*prometheus.Desc)
 	globalStatsDescMutex   = sync.RWMutex{}
 
-	zoneStatsDescriptors = make(map[string]*prometheus.Desc)
+	zoneStatsDescriptors = make(map[string][2]*prometheus.Desc)
 	zoneStatsDescMutex   = sync.RWMutex{}
 )
 
@@ -128,7 +136,7 @@ func getProcessMemory(pid int) uint64 {
 }
 
 // Get or create a metric descriptor for global stats
-func getGlobalStatsDescriptor(item, section, id string) *prometheus.Desc {
+func getGlobalStatsDescriptor(item string) [2]*prometheus.Desc {
 	globalStatsDescMutex.RLock()
 	if desc, exists := globalStatsDescriptors[item]; exists {
 		globalStatsDescMutex.RUnlock()
@@ -146,15 +154,15 @@ func getGlobalStatsDescriptor(item, section, id string) *prometheus.Desc {
 	}
 
 	// Create metric name based on item
-	metricName := fmt.Sprintf("knot_global_stats_%s", sanitizeMetricName(item))
+	metricName := fmt.Sprintf("knot_stats_%s", sanitizeMetricName(item))
 
 	// Create help text
 	help := fmt.Sprintf("Global statistic: %s", item)
 
 	// Create labels - always include section and type (using ID as type)
-	labels := []string{"section", "type"}
+	labels := []string{"module", "type"}
 
-	desc := prometheus.NewDesc(metricName, help, labels, nil)
+	desc := makeDescPair(metricName, help, labels, nil)
 	globalStatsDescriptors[item] = desc
 
 	debugLog("Created new global stats descriptor: %s with labels: %v", metricName, labels)
@@ -162,7 +170,7 @@ func getGlobalStatsDescriptor(item, section, id string) *prometheus.Desc {
 }
 
 // Get or create a metric descriptor for zone stats
-func getZoneStatsDescriptor(item, section, id string) *prometheus.Desc {
+func getZoneStatsDescriptor(item string) [2]*prometheus.Desc {
 	zoneStatsDescMutex.RLock()
 	if desc, exists := zoneStatsDescriptors[item]; exists {
 		zoneStatsDescMutex.RUnlock()
@@ -186,9 +194,9 @@ func getZoneStatsDescriptor(item, section, id string) *prometheus.Desc {
 	help := fmt.Sprintf("Zone statistic: %s", item)
 
 	// Create labels - always include zone, section and type (using ID as type)
-	labels := []string{"zone", "section", "type"}
+	labels := []string{"zone", "module", "type"}
 
-	desc := prometheus.NewDesc(metricName, help, labels, nil)
+	desc := makeDescPair(metricName, help, labels, nil)
 	zoneStatsDescriptors[item] = desc
 
 	debugLog("Created new zone stats descriptor: %s with labels: %v", metricName, labels)
@@ -253,29 +261,51 @@ func (c *KnotCollector) convertStateTime(timeStr string) *float64 {
 
 // Describe implements prometheus.Collector interface
 func (c *KnotCollector) Describe(ch chan<- *prometheus.Desc) {
+	sendDesc := func(desc [2]*prometheus.Desc) {
+		ch <- desc[0]
+		ch <- desc[1]
+	}
+
 	// Always include build info
 	ch <- buildInfoDesc
 
 	if c.collectMemInfo {
-		ch <- memoryUsageDesc
+		sendDesc(memoryUsageDesc)
 	}
 
 	// For global stats and zone stats, we can't pre-describe all metrics since they're dynamic
 	// Prometheus will handle this automatically during collection
 
 	if c.collectZoneRoles {
-		ch <- zoneStatusDesc
+		ch <- zoneStatusDesc[0]
+		ch <- zoneStatusDesc[1]
 	}
 	if c.collectZoneSerial {
-		ch <- zoneSerialDesc
+		sendDesc(zoneSerialDesc)
 	}
 	if c.collectZoneTimers {
-		ch <- zoneRefreshDesc
-		ch <- zoneRetryDesc
-		ch <- zoneExpirationDesc
-		ch <- zoneStatusExpirationDesc
-		ch <- zoneStatusRefreshDesc
+		sendDesc(zoneRefreshDesc)
+		sendDesc(zoneRetryDesc)
+		sendDesc(zoneExpirationDesc)
+		sendDesc(zoneStatusExpirationDesc)
+		sendDesc(zoneStatusRefreshDesc)
 	}
+}
+
+// send both the base metric (gauge) and its %s_total variant (counter)
+func sendMetrics(ch chan<- prometheus.Metric, desc [2]*prometheus.Desc, value float64, labelValues ...string) {
+	ch <- prometheus.MustNewConstMetric(
+		desc[0],
+		prometheus.GaugeValue,
+		value,
+		labelValues...,
+	)
+	ch <- prometheus.MustNewConstMetric(
+		desc[1],
+		prometheus.CounterValue,
+		value,
+		labelValues...,
+	)
 }
 
 // Collect implements prometheus.Collector interface
@@ -315,12 +345,7 @@ func (c *KnotCollector) Collect(ch chan<- prometheus.Metric) {
 	if c.collectMemInfo {
 		memUsage := memoryUsage()
 		for pid, usage := range memUsage {
-			ch <- prometheus.MustNewConstMetric(
-				memoryUsageDesc,
-				prometheus.GaugeValue,
-				float64(usage),
-				pid,
-			)
+			sendMetrics(ch, memoryUsageDesc, float64(usage), pid)
 		}
 	}
 
@@ -429,14 +454,8 @@ func (c *KnotCollector) collectGlobalStats(ctl *libknot.Ctl, ch chan<- prometheu
 					data.Section, data.Item, data.ID, data.Data)
 
 				// Get the dynamic metric descriptor
-				desc := getGlobalStatsDescriptor(data.Item, data.Section, data.ID)
-
-				// Create metric with section and type labels
-				// Note: ID can be empty, which will result in type="" label
-				ch <- prometheus.MustNewConstMetric(
-					desc,
-					prometheus.GaugeValue, // Changed from CounterValue to GaugeValue
-					value,
+				desc := getGlobalStatsDescriptor(data.Item)
+				sendMetrics(ch, desc, value,
 					data.Section, // section label
 					data.ID,      // type label (using ID field, can be empty)
 				)
@@ -496,13 +515,7 @@ func (c *KnotCollector) collectZoneStatusInfo(ctl *libknot.Ctl, ch chan<- promet
 
 				// Collect zone roles
 				if c.collectZoneRoles {
-					ch <- prometheus.MustNewConstMetric(
-						zoneStatusDesc,
-						prometheus.GaugeValue,
-						1.0,
-						currentZone,
-						zoneState,
-					)
+					sendMetrics(ch, zoneStatusDesc[0], zoneStatusDesc[1], 1.0, currentZone, zoneState)
 				}
 			} else if dataType == libknot.CtlTypeExtra && currentZone != "" {
 				// Type 2 (EXTRA) contains the zone details in order
@@ -511,12 +524,7 @@ func (c *KnotCollector) collectZoneStatusInfo(ctl *libknot.Ctl, ch chan<- promet
 				// Based on the output, position 1 appears to be the serial
 				if c.collectZoneSerial && responseIndex == 1 {
 					if serial, err := strconv.ParseFloat(data.Data, 64); err == nil {
-						ch <- prometheus.MustNewConstMetric(
-							zoneSerialDesc,
-							prometheus.GaugeValue,
-							serial,
-							currentZone,
-						)
+						sendMetrics(ch, zoneSerialDesc, serial, currentZone)
 					}
 				}
 
@@ -527,12 +535,7 @@ func (c *KnotCollector) collectZoneStatusInfo(ctl *libknot.Ctl, ch chan<- promet
 					switch responseIndex {
 					case 7: // refresh timer (appears as +1h28m44s format)
 						if seconds := c.convertStateTime(data.Data); seconds != nil {
-							ch <- prometheus.MustNewConstMetric(
-								zoneStatusRefreshDesc,
-								prometheus.GaugeValue,
-								*seconds,
-								currentZone,
-							)
+							sendMetrics(ch, zoneStatusRefreshDesc, *seconds, currentZone)
 							if debugMode {
 								debugLog("Zone status refresh timer: zone=%s, position=%d, value=%s, seconds=%f",
 									currentZone, responseIndex, data.Data, *seconds)
@@ -540,12 +543,7 @@ func (c *KnotCollector) collectZoneStatusInfo(ctl *libknot.Ctl, ch chan<- promet
 						}
 					case 9: // expiration timer (appears as +27D23h58m44s format)
 						if seconds := c.convertStateTime(data.Data); seconds != nil {
-							ch <- prometheus.MustNewConstMetric(
-								zoneStatusExpirationDesc,
-								prometheus.GaugeValue,
-								*seconds,
-								currentZone,
-							)
+							sendMetrics(ch, zoneStatusExpirationDesc, *seconds, currentZone)
 							if debugMode {
 								debugLog("Zone status expiration timer: zone=%s, position=%d, value=%s, seconds=%f",
 									currentZone, responseIndex, data.Data, *seconds)
@@ -601,12 +599,8 @@ func (c *KnotCollector) collectZoneStatistics(ctl *libknot.Ctl, ch chan<- promet
 				}
 
 				// Get the dynamic metric descriptor
-				desc := getZoneStatsDescriptor(statType, data.Section, statSubtype)
-
-				ch <- prometheus.MustNewConstMetric(
-					desc,
-					prometheus.GaugeValue,
-					value,
+				desc := getZoneStatsDescriptor(statType)
+				sendMetrics(ch, desc, value,
 					data.Zone,    // zone label
 					data.Section, // section label
 					statSubtype,  // type label (using ID field)
@@ -685,28 +679,13 @@ func (c *KnotCollector) collectZoneTimerInfo(ctl *libknot.Ctl, ch chan<- prometh
 
 					if allNumeric {
 						// Refresh timer (index 3 in SOA, index 1 in our array)
-						ch <- prometheus.MustNewConstMetric(
-							zoneRefreshDesc,
-							prometheus.GaugeValue,
-							float64(numericValues[1]),
-							data.Zone,
-						)
+						sendMetrics(ch, zoneRefreshDesc, float64(numericValues[1]), data.Zone)
 
 						// Retry timer (index 4 in SOA, index 2 in our array)
-						ch <- prometheus.MustNewConstMetric(
-							zoneRetryDesc,
-							prometheus.GaugeValue,
-							float64(numericValues[2]),
-							data.Zone,
-						)
+						sendMetrics(ch, zoneRetryDesc, float64(numericValues[2]), data.Zone)
 
 						// Expiration timer (index 5 in SOA, index 3 in our array)
-						ch <- prometheus.MustNewConstMetric(
-							zoneExpirationDesc,
-							prometheus.GaugeValue,
-							float64(numericValues[3]),
-							data.Zone,
-						)
+						sendMetrics(ch, zoneExpirationDesc, float64(numericValues[3]), data.Zone)
 					} else {
 						if debugMode && count <= 5 {
 							debugLog("Zone %s: numeric validation failed", data.Zone)
