@@ -23,13 +23,6 @@ var (
 		nil,
 	)
 
-	zoneStatusDesc = makeDescPair(
-		"knot_zone_status",
-		"Zone status from Knot DNS",
-		[]string{"zone", "role"},
-		nil,
-	)
-
 	zoneSerialDesc = makeDescPair(
 		"knot_zone_serial",
 		"Zone serial number from Knot DNS",
@@ -212,7 +205,6 @@ type KnotCollector struct {
 	collectZoneStats  bool
 	collectZoneStatus bool
 	collectZoneTimers bool
-	collectZoneRoles  bool
 	collectZoneSerial bool
 	mu                sync.Mutex
 	libknotVersion    string // Cache the libknot version
@@ -220,7 +212,7 @@ type KnotCollector struct {
 
 func newKnotCollector(sockPath string, timeout int,
 	collectMemInfo, collectStats, collectZoneStats,
-	collectZoneStatus, collectZoneSerial, collectZoneTimers, collectZoneRoles bool) *KnotCollector {
+	collectZoneStatus, collectZoneSerial, collectZoneTimers bool) *KnotCollector {
 
 	// Get libknot version once during initialization
 	libknotVersion := libknot.GetVersion()
@@ -233,7 +225,6 @@ func newKnotCollector(sockPath string, timeout int,
 		collectZoneStats:  collectZoneStats,
 		collectZoneStatus: collectZoneStatus,
 		collectZoneTimers: collectZoneTimers,
-		collectZoneRoles:  collectZoneRoles,
 		collectZoneSerial: collectZoneSerial,
 		libknotVersion:    libknotVersion,
 	}
@@ -276,10 +267,6 @@ func (c *KnotCollector) Describe(ch chan<- *prometheus.Desc) {
 	// For global stats and zone stats, we can't pre-describe all metrics since they're dynamic
 	// Prometheus will handle this automatically during collection
 
-	if c.collectZoneRoles {
-		ch <- zoneStatusDesc[0]
-		ch <- zoneStatusDesc[1]
-	}
 	if c.collectZoneSerial {
 		sendDesc(zoneSerialDesc)
 	}
@@ -482,7 +469,6 @@ func (c *KnotCollector) collectZoneStatusInfo(ctl *libknot.Ctl, ch chan<- promet
 	count := 0
 	responseCount := 0
 	currentZone := ""
-	zoneState := ""
 	responseIndex := 0
 
 	for {
@@ -510,13 +496,7 @@ func (c *KnotCollector) collectZoneStatusInfo(ctl *libknot.Ctl, ch chan<- promet
 			// Type 1 (DATA) with zone name indicates start of new zone
 			if dataType == libknot.CtlTypeData && data.Zone != "" && data.Zone != currentZone {
 				currentZone = data.Zone
-				zoneState = data.Data // This is the zone state (slave, master, etc.)
 				responseIndex = 0
-
-				// Collect zone roles
-				if c.collectZoneRoles {
-					sendMetrics(ch, zoneStatusDesc[0], zoneStatusDesc[1], 1.0, currentZone, zoneState)
-				}
 			} else if dataType == libknot.CtlTypeExtra && currentZone != "" {
 				// Type 2 (EXTRA) contains the zone details in order
 				responseIndex++
