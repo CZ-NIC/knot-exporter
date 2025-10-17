@@ -1,12 +1,21 @@
 # Knot DNS Exporter
 
-A Prometheus exporter for Knot DNS server that provides comprehensive metrics collection including global statistics, zone statistics, zone status, and memory usage.
+A Prometheus exporter for Knot DNS server that provides comprehensive metrics
+collection including global statistics, zone statistics, zone status, and memory
+usage.
+
+This project is a Go port of the original Python-based Knot DNS exporter found
+in the [Knot DNS project](https://gitlab.nic.cz/knot/knot-dns/-/tree/master/python/knot_exporter).
+
+The Go implementation leverages the same C libraries and control interface from
+the [Knot DNS project](https://gitlab.nic.cz/knot/knot-dns) while providing
+improved performance and easier deployment through static binary compilation.
 
 ## Features
 
 - **Global Statistics**: Knot DNS server-wide metrics
 - **Zone Statistics**: Per-zone metrics including query counts and response codes
-- **Zone Status**: Zone state information (master/slave) and serial numbers
+- **Zone Serials**: Zone serial numbers
 - **Zone Timers**: SOA record timers (refresh, retry, expiration)
 - **Memory Usage**: Process memory consumption monitoring
 - **Build Information**: Version and build metadata
@@ -70,7 +79,6 @@ Common options:
   -knot-socket-path /run/knot/knot.sock \
   -knot-socket-timeout 5000 \
   -zone-timers \
-  -zone-roles \
   -debug
 ```
 
@@ -86,11 +94,14 @@ Common options:
 - `-no-zone-status`: Disable zone status collection
 - `-no-zone-serial`: Disable zone serial collection
 - `-zone-timers`: Enable SOA timer collection
-- `-zone-roles`: Enable zone role collection
 - `-debug`: Enable debug logging
 - `-version`: Show version information
 
 ## Metrics
+
+Each metric comes in two variants, one as the prometheus gauge type and the
+other, denoted with a `_total` suffix, as the counter type. This is useful for
+the detection of overflows, service restarts or other such events.
 
 ### Global Metrics
 
@@ -138,7 +149,6 @@ ExecStart=/usr/local/bin/knot-exporter \
     -web-listen-addr 0.0.0.0 \
     -web-listen-port 9433 \
     -zone-timers \
-    -zone-roles
 Restart=always
 RestartSec=5
 
@@ -147,6 +157,7 @@ WantedBy=multi-user.target
 ```
 
 Enable and start:
+
 ```bash
 sudo systemctl enable knot-exporter
 sudo systemctl start knot-exporter
@@ -165,13 +176,22 @@ scrape_configs:
     scrape_timeout: 10s
 ```
 
+Optionally if you'd like to disable the counter metrics:
+
+```yaml
+metric_relabel_configs:
+  - source_labels: [__name__]
+    regex: '.*_total$'
+    action: drop
+```
+
 ## Development
 
 ### Project Structure
 
 ```
 knot-exporter/
-├── go.mod                  # Go module definition
+├── go.mod                 # Go module definition
 ├── Makefile               # Build configuration
 ├── main.go                # Main application logic
 ├── libknot/               # Libknot C interface package
@@ -193,42 +213,22 @@ make fmt
 make vet
 ```
 
-## Acknowledgments
-
-This project is a Go port of the original Python-based Knot DNS exporter found in the [Knot DNS project](https://gitlab.nic.cz/knot/knot-dns/-/tree/master/python/knot_exporter). We extend our gratitude to the CZ.NIC team and the Knot DNS developers for their excellent work on the original implementation.
-
-The Go implementation leverages the same C libraries and control interface from the [Knot DNS project](https://gitlab.nic.cz/knot/knot-dns) while providing improved performance and easier deployment through static binary compilation.
-
 ## License
 
-This project is licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later), following the same license as the upstream Knot DNS project.
-
-```
-Copyright (C) 2025 Knot DNS Exporter Contributors
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-```
+This project is licensed under the GNU General Public License v3.0 or later
+(GPL-3.0-or-later).
 
 ### License Compatibility
 
-- **Knot DNS**: Licensed under GPL-3.0-or-later
+- **Knot DNS**: Licensed under GPL-2.0-or-later
 - **This project**: Licensed under GPL-3.0-or-later (compatible)
-- **libknot C libraries**: GPL-3.0-or-later (linked as permitted by GPL)
+- **libknot C libraries**: GPL-2.0-or-later (linked as permitted by GPL)
 
 ## Contributing
 
-We welcome contributions to improve this Knot DNS exporter! This project maintains the spirit of the original Python implementation while leveraging Go's advantages.
+We welcome contributions to improve this Knot DNS exporter! This project
+maintains the spirit of the original Python implementation while leveraging Go's
+advantages, chief among them the standalone nature of resulting binaries.
 
 ### How to Contribute
 
@@ -293,7 +293,8 @@ When reporting issues, please include:
 
 ### Code of Conduct
 
-This project follows the same collaborative spirit as the upstream Knot DNS project. Please:
+This project follows the same collaborative spirit as the upstream Knot DNS
+project. Please:
 
 - Be respectful and constructive in discussions
 - Focus on technical merit and project improvement
@@ -302,6 +303,9 @@ This project follows the same collaborative spirit as the upstream Knot DNS proj
 
 ### Upstream Coordination
 
-We aim to stay compatible with the original Python implementation and coordinate with the upstream Knot DNS project when appropriate. Consider contributing improvements back to the original Python exporter when applicable.
+We aim to stay compatible with the original Python implementation and coordinate
+with the upstream Knot DNS project when appropriate. Consider contributing
+improvements back to the original Python exporter when applicable.
 
-For questions or discussions, please use the project's issue tracker or reach out to the maintainers.
+For questions or discussions, please use the project's issue tracker or reach
+out to the maintainers.

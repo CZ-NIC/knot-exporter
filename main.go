@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/fgouteroux/knot-exporter/libknot"
+	"github.com/CZ-NIC/knot-exporter/libknot"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -151,7 +151,6 @@ func main() {
 	noZoneStatus := flag.Bool("no-zone-status", false, "disable collection of zone status")
 	noZoneSerial := flag.Bool("no-zone-serial", false, "disable collection of zone serial")
 	zoneTimers := flag.Bool("zone-timers", false, "enables collection of zone SOA timer values")
-	zoneRoles := flag.Bool("zone-roles", false, "enables collection of zone roles values")
 	debug := flag.Bool("debug", false, "enable debug logging")
 	showVersion := flag.Bool("version", false, "show version information and exit")
 	skipValidation := flag.Bool("skip-validation", false, "skip initial validation checks (useful for testing)")
@@ -200,7 +199,6 @@ func main() {
 		!*noZoneStatus,
 		!*noZoneSerial,
 		*zoneTimers,
-		*zoneRoles,
 	)
 
 	// Register collector with Prometheus
