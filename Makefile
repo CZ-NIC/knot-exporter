@@ -9,13 +9,10 @@ GO_VERSION ?= $(shell go version | awk '{print $3}')
 # Go build flags
 LDFLAGS = -X main.version=$(VERSION) \
           -X main.buildTime=$(BUILD_TIME) \
-          -X main.gitCommit=$(GIT_COMMIT) \
-          -X main.goVersion=$(GO_VERSION)
+          -X main.gitCommit=$(GIT_COMMIT)
 
 # Build flags for CGO
 CGO_ENABLED = 1
-CGO_CFLAGS = -std=c99
-CGO_LDFLAGS = -L/usr/lib64 -lknot
 
 # Default target
 .PHONY: all
@@ -25,8 +22,6 @@ all: build
 .PHONY: build
 build:
 	CGO_ENABLED=$(CGO_ENABLED) \
-	CGO_CFLAGS="$(CGO_CFLAGS)" \
-	CGO_LDFLAGS="$(CGO_LDFLAGS)" \
 	go build -ldflags "$(LDFLAGS)" -o knot-exporter .
 
 # Build with race detector
@@ -87,6 +82,29 @@ lint:
 vet:
 	go vet ./...
 
+# Directory for security-related scripts and outputs
+SECURITY_DIR := .security
+
+# Security scan with filtered gosec results
+.PHONY: security
+security:
+	@command -v gosec >/dev/null 2>&1 || { echo >&2 "gosec is required but not installed. Run: go install github.com/securego/gosec/v2/cmd/gosec@latest"; exit 1; }
+	@command -v jq >/dev/null 2>&1 || { echo >&2 "jq is required but not installed. Run: apt-get install jq or yum install jq"; exit 1; }
+	@mkdir -p $(SECURITY_DIR)
+	@echo "Running security scan..."
+	@gosec -quiet -fmt=json -out=$(SECURITY_DIR)/gosec-output.json ./... || true
+	@echo "Filtering results..."
+	@jq '.Issues = (.Issues | map(select((.file | contains(".cache/go-build") | not))))' \
+		$(SECURITY_DIR)/gosec-output.json > $(SECURITY_DIR)/filtered-output.json
+	@FILTERED_COUNT=$$(jq '.Issues | length' $(SECURITY_DIR)/filtered-output.json); \
+	if [ "$$FILTERED_COUNT" -gt 0 ]; then \
+		echo "Found $$FILTERED_COUNT security issues after filtering:"; \
+		jq -r '.Issues[] | "[\(.file):\(.line)] - \(.rule_id) (CWE-\(.cwe.id)): \(.details) (Confidence: \(.confidence), Severity: \(.severity))\n\(.code)"' $(SECURITY_DIR)/filtered-output.json; \
+		exit 1; \
+	else \
+		echo "No security issues found after filtering !"; \
+	fi
+
 # Check dependencies
 .PHONY: check-deps
 check-deps:
@@ -135,3 +153,16 @@ help:
 	@echo "  version     - Show version information"
 	@echo "  dev         - Build development version with debug symbols"
 	@echo "  help        - Show this help"
+
+# GoReleaser targets
+.PHONY: release-snapshot
+release-snapshot:
+	goreleaser release --snapshot --rm-dist
+
+.PHONY: release-check
+release-check:
+	goreleaser check
+
+.PHONY: release
+release:
+	goreleaser release --clean
