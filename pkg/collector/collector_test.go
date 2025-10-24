@@ -1,4 +1,4 @@
-package main
+package collector
 
 import (
 	"testing"
@@ -34,7 +34,7 @@ func TestCollectorOptions(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create a collector with the specified options
-			collector := newKnotCollector("/test", 1000,
+			collector := NewKnotCollector("/test", 1000,
 				tc.collectMemInfo,
 				tc.collectStats,
 				tc.collectZoneStats,

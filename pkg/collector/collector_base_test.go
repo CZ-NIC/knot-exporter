@@ -1,4 +1,4 @@
-package main
+package collector
 
 import (
 	"os"
@@ -10,7 +10,7 @@ import (
 
 // TestKnotCollector_Describe tests the Describe method of KnotCollector
 func TestKnotCollector_Describe(t *testing.T) {
-	collector := newKnotCollector("/run/knot/knot.sock", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/run/knot/knot.sock", 1000, true, true, true, true, true, true)
 
 	ch := make(chan *prometheus.Desc, 50)
 	collector.Describe(ch)
@@ -27,7 +27,7 @@ func TestKnotCollector_Describe(t *testing.T) {
 
 // TestKnotCollector_ConvertStateTime tests the convertStateTime method
 func TestKnotCollector_ConvertStateTime(t *testing.T) {
-	collector := newKnotCollector("/run/knot/knot.sock", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/run/knot/knot.sock", 1000, true, true, true, true, true, true)
 
 	tests := []struct {
 		name     string
@@ -67,7 +67,7 @@ func TestKnotCollector_Collect(t *testing.T) {
 	registry := prometheus.NewRegistry()
 
 	// Create a collector with all options disabled for simpler testing
-	collector := newKnotCollector("/nonexistent", 1000, false, false, false, false, false, false)
+	collector := NewKnotCollector("/nonexistent", 1000, false, false, false, false, false, false)
 
 	// Register the collector
 	registry.MustRegister(collector)
@@ -157,10 +157,10 @@ func TestSendMetrics(t *testing.T) {
 	assert.Equal(t, 2, len(metrics), "Should have collected 2 metrics")
 }
 
-// TestNewKnotCollector tests the newKnotCollector factory function
+// TestNewKnotCollector tests the NewKnotCollector factory function
 func TestNewKnotCollector(t *testing.T) {
 	// Test with default options
-	collector := newKnotCollector("/test", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/test", 1000, true, true, true, true, true, true)
 	assert.NotNil(t, collector)
 	assert.Equal(t, "/test", collector.sockPath)
 	assert.Equal(t, 1000, collector.timeout)
@@ -172,7 +172,7 @@ func TestNewKnotCollector(t *testing.T) {
 	assert.True(t, collector.collectZoneTimers)
 
 	// Test with custom options
-	collector = newKnotCollector("/other", 2000, false, false, true, false, true, false)
+	collector = NewKnotCollector("/other", 2000, false, false, true, false, true, false)
 	assert.NotNil(t, collector)
 	assert.Equal(t, "/other", collector.sockPath)
 	assert.Equal(t, 2000, collector.timeout)

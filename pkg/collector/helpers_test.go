@@ -1,4 +1,4 @@
-package main
+package collector
 
 // Helper functions used across multiple test files
 

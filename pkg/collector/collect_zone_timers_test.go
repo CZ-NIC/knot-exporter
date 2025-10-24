@@ -1,9 +1,9 @@
-package main
+package collector
 
 import (
 	"testing"
 
-	"github.com/CZ-NIC/knot-exporter/libknot"
+	"github.com/CZ-NIC/knot-exporter/pkg/libknot"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 )
@@ -31,7 +31,7 @@ func TestCollectZoneTimerInfo(t *testing.T) {
 	mockCtl.On("ReceiveResponse").Return(libknot.CtlTypeBlock, nil, nil).Once()
 
 	// Create a collector and channel
-	collector := newKnotCollector("/test", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/test", 1000, true, true, true, true, true, true)
 	ch := make(chan prometheus.Metric, 20)
 
 	// Call collectZoneTimerInfo
@@ -80,7 +80,7 @@ func TestCollectZoneTimerInfo_InvalidSOA(t *testing.T) {
 	mockCtl.On("ReceiveResponse").Return(libknot.CtlTypeBlock, nil, nil).Once()
 
 	// Create a collector and channel
-	collector := newKnotCollector("/test", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/test", 1000, true, true, true, true, true, true)
 	ch := make(chan prometheus.Metric, 10)
 
 	// Call collectZoneTimerInfo
@@ -123,7 +123,7 @@ func TestCollectZoneTimerInfo_ValidAndInvalidSOA(t *testing.T) {
 	mockCtl.On("ReceiveResponse").Return(libknot.CtlTypeBlock, nil, nil).Once()
 
 	// Create a collector and channel
-	collector := newKnotCollector("/test", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/test", 1000, true, true, true, true, true, true)
 	ch := make(chan prometheus.Metric, 10)
 
 	// Call collectZoneTimerInfo
@@ -156,7 +156,7 @@ func TestCollectZoneTimerInfo_NoData(t *testing.T) {
 	mockCtl.On("ReceiveResponse").Return(libknot.CtlTypeBlock, nil, nil).Once()
 
 	// Create a collector and channel
-	collector := newKnotCollector("/test", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/test", 1000, true, true, true, true, true, true)
 	ch := make(chan prometheus.Metric, 10)
 
 	// Call collectZoneTimerInfo
@@ -187,7 +187,7 @@ func TestCollectZoneTimerInfo_Error(t *testing.T) {
 	mockCtl.On("SendCommandWithType", "zone-read", "SOA").Return(mockError)
 
 	// Create a collector and channel
-	collector := newKnotCollector("/test", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/test", 1000, true, true, true, true, true, true)
 	ch := make(chan prometheus.Metric, 10)
 
 	// Call collectZoneTimerInfo - should return the error

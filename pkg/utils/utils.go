@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"log"
@@ -7,10 +7,14 @@ import (
 	"strings"
 )
 
+// DebugMode is the global debug flag
+var DebugMode bool
+
 // Compile the regex pattern once at package initialization
 var durationRegex = regexp.MustCompile(`^([+-])((\d+)D)?((\d+)h)?((\d+)m)?((\d+)s)?$`)
 
-func isPrefixIn(s string, prefixes []string) bool {
+// IsPrefixIn checks if string s starts with any of the given prefixes
+func IsPrefixIn(s string, prefixes []string) bool {
 	for _, prefix := range prefixes {
 		if len(s) >= len(prefix) && s[:len(prefix)] == prefix {
 			return true
@@ -19,7 +23,8 @@ func isPrefixIn(s string, prefixes []string) bool {
 	return false
 }
 
-func parseDurationString(durationStr string) (float64, bool) {
+// ParseDurationString parses a duration string and returns the total seconds
+func ParseDurationString(durationStr string) (float64, bool) {
 	matches := durationRegex.FindStringSubmatch(durationStr)
 
 	if len(matches) == 0 {
@@ -81,15 +86,15 @@ func parseDurationString(durationStr string) (float64, bool) {
 	return totalSeconds, true
 }
 
-// Debug logging function
-func debugLog(format string, args ...interface{}) {
-	if debugMode {
+// DebugLog logs debug messages if DebugMode is enabled
+func DebugLog(format string, args ...interface{}) {
+	if DebugMode {
 		log.Printf("[DEBUG] "+format, args...)
 	}
 }
 
-// Helper function to sanitize metric names for Prometheus
-func sanitizeMetricName(name string) string {
+// SanitizeMetricName sanitizes metric names for Prometheus
+func SanitizeMetricName(name string) string {
 	// Replace invalid characters with underscores
 	result := strings.ToLower(name)
 	result = strings.ReplaceAll(result, "-", "_")

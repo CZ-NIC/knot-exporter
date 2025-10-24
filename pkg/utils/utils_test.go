@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestIsPrefixIn tests the isPrefixIn function
+// TestIsPrefixIn tests the IsPrefixIn function
 func TestIsPrefixIn(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -54,13 +54,13 @@ func TestIsPrefixIn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isPrefixIn(tt.s, tt.prefixes)
+			got := IsPrefixIn(tt.s, tt.prefixes)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-// TestParseDurationString tests the parseDurationString function
+// TestParseDurationString tests the ParseDurationString function
 func TestParseDurationString(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -144,7 +144,7 @@ func TestParseDurationString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := parseDurationString(tt.durationStr)
+			got, ok := ParseDurationString(tt.durationStr)
 			assert.Equal(t, tt.ok, ok)
 			if tt.ok {
 				assert.InDelta(t, tt.want, got, 0.001)
@@ -153,25 +153,25 @@ func TestParseDurationString(t *testing.T) {
 	}
 }
 
-// TestDebugLog tests the debugLog function
+// TestDebugLog tests the DebugLog function
 func TestDebugLog(t *testing.T) {
 	// Test with debug mode off
-	debugMode = false
+	DebugMode = false
 	assert.NotPanics(t, func() {
-		debugLog("Test message %d", 123)
+		DebugLog("Test message %d", 123)
 	})
 
 	// Test with debug mode on
-	debugMode = true
+	DebugMode = true
 	assert.NotPanics(t, func() {
-		debugLog("Test message %d", 123)
+		DebugLog("Test message %d", 123)
 	})
 
 	// Reset debug mode
-	debugMode = false
+	DebugMode = false
 }
 
-// TestSanitizeMetricName tests the sanitizeMetricName function
+// TestSanitizeMetricName tests the SanitizeMetricName function
 func TestSanitizeMetricName(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -232,7 +232,7 @@ func TestSanitizeMetricName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := sanitizeMetricName(tt.input)
+			got := SanitizeMetricName(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -304,21 +304,21 @@ func TestDurationRegexp(t *testing.T) {
 
 // TestEdgeCases tests some edge cases
 func TestEdgeCases(t *testing.T) {
-	// Test isPrefixIn with nil slice
-	assert.False(t, isPrefixIn("test", nil))
+	// Test IsPrefixIn with nil slice
+	assert.False(t, IsPrefixIn("test", nil))
 
-	// Test isPrefixIn with same length strings
-	assert.True(t, isPrefixIn("test", []string{"test"}))
+	// Test IsPrefixIn with same length strings
+	assert.True(t, IsPrefixIn("test", []string{"test"}))
 
-	// Test parseDurationString with partially matching string
-	_, ok := parseDurationString("+1h invalid")
+	// Test ParseDurationString with partially matching string
+	_, ok := ParseDurationString("+1h invalid")
 	assert.False(t, ok)
 
-	// Test sanitizeMetricName with special characters - fix this test
+	// Test SanitizeMetricName with special characters - fix this test
 	input := "a$b%c"
-	expected := sanitizeMetricName(input) // Use the actual function to determine expected value
-	assert.Equal(t, expected, sanitizeMetricName(input))
+	expected := SanitizeMetricName(input) // Use the actual function to determine expected value
+	assert.Equal(t, expected, SanitizeMetricName(input))
 
-	// Test sanitizeMetricName with already valid name
-	assert.Equal(t, "already_valid", sanitizeMetricName("already_valid"))
+	// Test SanitizeMetricName with already valid name
+	assert.Equal(t, "already_valid", SanitizeMetricName("already_valid"))
 }

@@ -12,6 +12,9 @@ LDFLAGS = -X main.version=$(VERSION) \
           -X main.buildTime=$(BUILD_TIME) \
           -X main.gitCommit=$(GIT_COMMIT)
 
+# Main package path
+MAIN_PATH = ./cmd/knot-exporter
+
 # Build flags for CGO
 CGO_ENABLED = 1
 
@@ -23,7 +26,7 @@ all: build
 .PHONY: build
 build:
 	CGO_ENABLED=$(CGO_ENABLED) \
-	go build -ldflags "$(LDFLAGS)" -o knot-exporter .
+	go build -ldflags "$(LDFLAGS)" -o knot-exporter $(MAIN_PATH)
 
 # Build with race detector
 .PHONY: build-race
@@ -31,7 +34,7 @@ build-race:
 	CGO_ENABLED=$(CGO_ENABLED) \
 	CGO_CFLAGS="$(CGO_CFLAGS)" \
 	CGO_LDFLAGS="$(CGO_LDFLAGS)" \
-	go build -race -ldflags "$(LDFLAGS)" -o knot-exporter .
+	go build -race -ldflags "$(LDFLAGS)" -o knot-exporter $(MAIN_PATH)
 
 # Static build (if supported)
 .PHONY: build-static
@@ -39,7 +42,7 @@ build-static:
 	CGO_ENABLED=$(CGO_ENABLED) \
 	CGO_CFLAGS="$(CGO_CFLAGS)" \
 	CGO_LDFLAGS="$(CGO_LDFLAGS) -static" \
-	go build -ldflags "$(LDFLAGS) -extldflags '-static'" -o knot-exporter .
+	go build -ldflags "$(LDFLAGS) -extldflags '-static'" -o knot-exporter $(MAIN_PATH)
 
 # Test
 .PHONY: test
@@ -133,7 +136,7 @@ dev:
 	CGO_ENABLED=$(CGO_ENABLED) \
 	CGO_CFLAGS="$(CGO_CFLAGS) -g" \
 	CGO_LDFLAGS="$(CGO_LDFLAGS)" \
-	go build -gcflags="all=-N -l" -ldflags "$(LDFLAGS)" -o knot-exporter .
+	go build -gcflags="all=-N -l" -ldflags "$(LDFLAGS)" -o knot-exporter $(MAIN_PATH)
 
 # Help
 .PHONY: help
