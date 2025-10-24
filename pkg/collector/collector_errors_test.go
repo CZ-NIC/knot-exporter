@@ -1,4 +1,4 @@
-package main
+package collector
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/CZ-NIC/knot-exporter/libknot"
+	"github.com/CZ-NIC/knot-exporter/pkg/libknot"
 )
 
 // Variables to override in tests
@@ -40,7 +40,7 @@ func TestCollectWithErrors(t *testing.T) {
 	mockCtl.On("SendCommandWithType", "zone-read", "SOA").Return(mockError).Maybe()
 
 	// Create a collector with all options enabled
-	collector := newKnotCollector("/test", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/test", 1000, true, true, true, true, true, true)
 
 	// Create a registry and register the collector
 	registry := prometheus.NewRegistry()
@@ -78,7 +78,7 @@ func TestCollectWithConnectionError(t *testing.T) {
 	mockCtl.On("Connect", mock.Anything).Return(CreateCtlErrorConnect("connection error")).Maybe()
 
 	// Create a collector
-	collector := newKnotCollector("/test", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/test", 1000, true, true, true, true, true, true)
 
 	// Create a registry and register the collector
 	registry := prometheus.NewRegistry()
@@ -112,7 +112,7 @@ func TestCollectWithNilCtl(t *testing.T) {
 	newLibknotCtl = func() interface{} { return nil }
 
 	// Create a collector
-	collector := newKnotCollector("/test", 1000, true, true, true, true, true, true)
+	collector := NewKnotCollector("/test", 1000, true, true, true, true, true, true)
 
 	// Create a registry and register the collector
 	registry := prometheus.NewRegistry()
@@ -147,7 +147,7 @@ func TestCollectWithReceiveError(t *testing.T) {
 	mockCtl.On("ReceiveResponse").Return(libknot.CtlTypeData, nil, CreateCtlErrorReceive("receive error")).Once()
 
 	// Create a collector and channel
-	collector := newKnotCollector("/test", 1000, true, true, false, false, false, false) // Only collect global stats
+	collector := NewKnotCollector("/test", 1000, true, true, false, false, false, false) // Only collect global stats
 	ch := make(chan prometheus.Metric, 10)
 
 	// Call collectGlobalStats

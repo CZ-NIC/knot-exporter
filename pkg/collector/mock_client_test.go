@@ -1,7 +1,7 @@
-package main
+package collector
 
 import (
-	"github.com/CZ-NIC/knot-exporter/libknot"
+	"github.com/CZ-NIC/knot-exporter/pkg/libknot"
 	"github.com/stretchr/testify/mock"
 )
 
