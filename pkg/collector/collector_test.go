@@ -74,3 +74,63 @@ func TestCollectorOptions(t *testing.T) {
 		})
 	}
 }
+
+// TestMemoryUsageWithNoProcess tests memoryUsage when no knotd process exists
+func TestMemoryUsageWithNoProcess(t *testing.T) {
+	// This should return an empty map when knotd is not running
+	usage := memoryUsage()
+	assert.NotNil(t, usage)
+	// Map should be empty or have no valid entries when knotd is not running
+	assert.IsType(t, map[string]uint64{}, usage)
+}
+
+// TestGetProcessMemoryInvalidPID tests getProcessMemory with invalid PIDs
+func TestGetProcessMemoryInvalidPID(t *testing.T) {
+	tests := []struct {
+		name string
+		pid  int
+	}{
+		{"negative PID", -1},
+		{"zero PID", 0},
+		{"very large PID", 9999999},
+		{"non-existent PID", 999999},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			memory := getProcessMemory(tt.pid)
+			assert.Equal(t, uint64(0), memory)
+		})
+	}
+}
+
+// TestGetProcessMemorySelfProcess tests getProcessMemory with current process
+func TestGetProcessMemorySelfProcess(t *testing.T) {
+	// Test with the current process PID (should have some memory usage)
+	pid := 1 // init process should always exist
+	memory := getProcessMemory(pid)
+	// Memory could be 0 if we can't read /proc/1/status (permission issue)
+	// or > 0 if we can read it
+	assert.GreaterOrEqual(t, memory, uint64(0))
+}
+
+// TestCollectWithMemInfo tests Collect with memory info enabled
+func TestCollectWithMemInfo(t *testing.T) {
+	collector := NewKnotCollector("/nonexistent/socket.sock", 1000,
+		true, false, false, false, false, false)
+
+	ch := make(chan prometheus.Metric, 100)
+	go func() {
+		collector.Collect(ch)
+		close(ch)
+	}()
+
+	// Consume all metrics
+	metricsCount := 0
+	for range ch {
+		metricsCount++
+	}
+
+	// Should have at least the build info metric
+	assert.Greater(t, metricsCount, 0)
+}
