@@ -5,7 +5,8 @@ before:
     - go mod tidy
 
 builds:
-  - env:
+  - main: ./cmd/knot-exporter
+    env:
       - CGO_ENABLED=1
     goos:
       - linux

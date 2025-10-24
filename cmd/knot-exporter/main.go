@@ -14,7 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/CZ-NIC/knot-exporter/libknot"
+	"github.com/CZ-NIC/knot-exporter/pkg/collector"
+	"github.com/CZ-NIC/knot-exporter/pkg/libknot"
+	"github.com/CZ-NIC/knot-exporter/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -26,9 +28,6 @@ var (
 	gitCommit = "unknown"
 	goVersion = runtime.Version()
 )
-
-// Global debug flag
-var debugMode bool
 
 // Version information
 func printVersion() {
@@ -76,7 +75,7 @@ func validateConfig(sockPath string, addr string, port int) error {
 
 // testKnotConnection tests if we can connect to Knot DNS
 func testKnotConnection(sockPath string, timeout int) error {
-	debugLog("Testing connection to Knot DNS at %s", sockPath)
+	utils.DebugLog("Testing connection to Knot DNS at %s", sockPath)
 
 	ctl := libknot.New()
 	if ctl == nil {
@@ -100,7 +99,7 @@ func testKnotConnection(sockPath string, timeout int) error {
 		return fmt.Errorf("failed to receive response from knot: %v", err)
 	}
 
-	debugLog("Successfully connected to Knot DNS")
+	utils.DebugLog("Successfully connected to Knot DNS")
 	return nil
 }
 
@@ -163,7 +162,7 @@ func main() {
 	flag.Parse()
 
 	// Set global debug flag
-	debugMode = *debug
+	utils.DebugMode = *debug
 
 	// Show version and exit
 	if *showVersion {
@@ -172,9 +171,15 @@ func main() {
 	}
 
 	log.Printf("Starting Knot DNS Exporter %s", version)
-	if debugMode {
+	if utils.DebugMode {
 		log.Printf("Debug mode enabled")
 	}
+
+	// Set collector build info
+	collector.Version = version
+	collector.BuildTime = buildTime
+	collector.GitCommit = gitCommit
+	collector.GoVersion = goVersion
 
 	// Validate configuration unless skipped
 	if !*skipValidation {
@@ -195,7 +200,7 @@ func main() {
 
 	// Create collector with error handling
 	log.Printf("Initializing metrics collector...")
-	collector := newKnotCollector(
+	knotCollector := collector.NewKnotCollector(
 		*knotSocketPath,
 		*knotSocketTimeout,
 		!*noMeminfo,
@@ -207,7 +212,7 @@ func main() {
 	)
 
 	// Register collector with Prometheus
-	if err := prometheus.Register(collector); err != nil {
+	if err := prometheus.Register(knotCollector); err != nil {
 		log.Fatalf("Failed to register Prometheus collector: %v", err)
 	}
 

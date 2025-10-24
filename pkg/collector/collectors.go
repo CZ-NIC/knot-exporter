@@ -1,4 +1,4 @@
-package main
+package collector
 
 import (
 	"bufio"
@@ -12,9 +12,17 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/CZ-NIC/knot-exporter/pkg/libknot"
+	"github.com/CZ-NIC/knot-exporter/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
+)
 
-	"github.com/CZ-NIC/knot-exporter/libknot"
+// Build information - set via build flags
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
+	GoVersion = runtime.Version()
 )
 
 // Metric descriptors
@@ -78,6 +86,16 @@ var (
 		nil,
 	)
 )
+
+// KnotCtlInterface defines an interface for Knot DNS control operations
+type KnotCtlInterface interface {
+	Connect(path string) error
+	Close()
+	SetTimeout(timeout int)
+	SendCommand(cmd string) error
+	SendCommandWithType(cmd string, rtype string) error
+	ReceiveResponse() (libknot.CtlType, *libknot.CtlData, error)
+}
 
 func makeDescPair(fqName, help string, variableLabels []string, constLabels prometheus.Labels) [2]*prometheus.Desc {
 	return [2]*prometheus.Desc{
@@ -162,7 +180,7 @@ func getGlobalStatsDescriptor(item string) [2]*prometheus.Desc {
 	}
 
 	// Create metric name based on item
-	metricName := fmt.Sprintf("knot_stats_%s", sanitizeMetricName(item))
+	metricName := fmt.Sprintf("knot_stats_%s", utils.SanitizeMetricName(item))
 
 	// Create help text
 	help := fmt.Sprintf("Global statistic: %s", item)
@@ -173,7 +191,7 @@ func getGlobalStatsDescriptor(item string) [2]*prometheus.Desc {
 	desc := makeDescPair(metricName, help, labels, nil)
 	globalStatsDescriptors[item] = desc
 
-	debugLog("Created new global stats descriptor: %s with labels: %v", metricName, labels)
+	utils.DebugLog("Created new global stats descriptor: %s with labels: %v", metricName, labels)
 	return desc
 }
 
@@ -196,7 +214,7 @@ func getZoneStatsDescriptor(item string) [2]*prometheus.Desc {
 	}
 
 	// Create metric name based on item
-	metricName := fmt.Sprintf("knot_zone_stats_%s", sanitizeMetricName(item))
+	metricName := fmt.Sprintf("knot_zone_stats_%s", utils.SanitizeMetricName(item))
 
 	// Create help text
 	help := fmt.Sprintf("Zone statistic: %s", item)
@@ -207,7 +225,7 @@ func getZoneStatsDescriptor(item string) [2]*prometheus.Desc {
 	desc := makeDescPair(metricName, help, labels, nil)
 	zoneStatsDescriptors[item] = desc
 
-	debugLog("Created new zone stats descriptor: %s with labels: %v", metricName, labels)
+	utils.DebugLog("Created new zone stats descriptor: %s with labels: %v", metricName, labels)
 	return desc
 }
 
@@ -225,7 +243,8 @@ type KnotCollector struct {
 	libknotVersion    string // Cache the libknot version
 }
 
-func newKnotCollector(sockPath string, timeout int,
+// NewKnotCollector creates a new KnotCollector with the specified configuration
+func NewKnotCollector(sockPath string, timeout int,
 	collectMemInfo, collectStats, collectZoneStats,
 	collectZoneStatus, collectZoneSerial, collectZoneTimers bool) *KnotCollector {
 
@@ -247,7 +266,7 @@ func newKnotCollector(sockPath string, timeout int,
 
 func (c *KnotCollector) convertStateTime(timeStr string) *float64 {
 	// Check for special states
-	if isPrefixIn(timeStr, []string{"pending", "running", "frozen"}) {
+	if utils.IsPrefixIn(timeStr, []string{"pending", "running", "frozen"}) {
 		result := float64(0)
 		return &result
 	}
@@ -256,7 +275,7 @@ func (c *KnotCollector) convertStateTime(timeStr string) *float64 {
 	}
 
 	// Parse time duration
-	if seconds, ok := parseDurationString(timeStr); ok {
+	if seconds, ok := utils.ParseDurationString(timeStr); ok {
 		return &seconds
 	}
 
@@ -321,10 +340,10 @@ func (c *KnotCollector) Collect(ch chan<- prometheus.Metric) {
 		buildInfoDesc,
 		prometheus.GaugeValue,
 		1.0,
-		version,
-		buildTime,
-		gitCommit,
-		goVersion,
+		Version,
+		BuildTime,
+		GitCommit,
+		GoVersion,
 		c.libknotVersion,
 		platform,
 	)
@@ -419,8 +438,8 @@ func (c *KnotCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 // Helper methods for collecting different types of metrics
-func (c *KnotCollector) collectGlobalStats(ctl *libknot.Ctl, ch chan<- prometheus.Metric) error {
-	debugLog("Collecting global stats...")
+func (c *KnotCollector) collectGlobalStats(ctl KnotCtlInterface, ch chan<- prometheus.Metric) error {
+	utils.DebugLog("Collecting global stats...")
 	if err := ctl.SendCommand("stats"); err != nil {
 		return err
 	}
@@ -437,14 +456,14 @@ func (c *KnotCollector) collectGlobalStats(ctl *libknot.Ctl, ch chan<- prometheu
 		responseCount++
 
 		// Debug every response for the first 20 responses
-		if debugMode && responseCount <= 20 {
-			debugLog("Response %d: type=%d, section='%s', item='%s', id='%s', zone='%s', data='%s'",
+		if utils.DebugMode && responseCount <= 20 {
+			utils.DebugLog("Response %d: type=%d, section='%s', item='%s', id='%s', zone='%s', data='%s'",
 				responseCount, dataType, data.Section, data.Item, data.ID, data.Zone, data.Data)
 		}
 
 		// Break on BLOCK (end of response) or END (end of connection)
 		if dataType == libknot.CtlTypeBlock || dataType == libknot.CtlTypeEnd {
-			debugLog("Stats collection ended: type=%d, total responses=%d", dataType, responseCount)
+			utils.DebugLog("Stats collection ended: type=%d, total responses=%d", dataType, responseCount)
 			break
 		}
 
@@ -452,7 +471,7 @@ func (c *KnotCollector) collectGlobalStats(ctl *libknot.Ctl, ch chan<- prometheu
 		if (dataType == libknot.CtlTypeData || dataType == libknot.CtlTypeExtra) && data.Item != "" && data.Data != "" {
 			count++
 			if value, err := strconv.ParseFloat(data.Data, 64); err == nil {
-				debugLog("Global stat: section='%s', item='%s', id='%s', value=%s",
+				utils.DebugLog("Global stat: section='%s', item='%s', id='%s', value=%s",
 					data.Section, data.Item, data.ID, data.Data)
 
 				// Get the dynamic metric descriptor
@@ -462,21 +481,21 @@ func (c *KnotCollector) collectGlobalStats(ctl *libknot.Ctl, ch chan<- prometheu
 					data.ID,      // type label (using ID field, can be empty)
 				)
 			} else {
-				debugLog("Failed to parse value '%s' for item '%s'", data.Data, data.Item)
+				utils.DebugLog("Failed to parse value '%s' for item '%s'", data.Data, data.Item)
 			}
 		} else if dataType == libknot.CtlTypeData || dataType == libknot.CtlTypeExtra {
 			// Debug cases where we skip metrics
-			debugLog("Skipped metric: type=%d, item='%s', data='%s' (missing item or data)",
+			utils.DebugLog("Skipped metric: type=%d, item='%s', data='%s' (missing item or data)",
 				dataType, data.Item, data.Data)
 		}
 	}
 
-	debugLog("Global stats: collected %d statistics from %d total responses", count, responseCount)
+	utils.DebugLog("Global stats: collected %d statistics from %d total responses", count, responseCount)
 	return nil
 }
 
-func (c *KnotCollector) collectZoneStatusInfo(ctl *libknot.Ctl, ch chan<- prometheus.Metric) error {
-	debugLog("Collecting zone status...")
+func (c *KnotCollector) collectZoneStatusInfo(ctl KnotCtlInterface, ch chan<- prometheus.Metric) error {
+	utils.DebugLog("Collecting zone status...")
 	if err := ctl.SendCommand("zone-status"); err != nil {
 		return err
 	}
@@ -493,14 +512,14 @@ func (c *KnotCollector) collectZoneStatusInfo(ctl *libknot.Ctl, ch chan<- promet
 		}
 
 		responseCount++
-		if debugMode && responseCount <= 10 { // Debug first 10 records only in debug mode
-			debugLog("Zone status response %d: type=%d, section='%s', item='%s', id='%s', zone='%s', data='%s'",
+		if utils.DebugMode && responseCount <= 10 { // Debug first 10 records only in debug mode
+			utils.DebugLog("Zone status response %d: type=%d, section='%s', item='%s', id='%s', zone='%s', data='%s'",
 				responseCount, dataType, data.Section, data.Item, data.ID, data.Zone, data.Data)
 		}
 
 		// Break on BLOCK (end of response) or END (end of connection)
 		if dataType == libknot.CtlTypeBlock || dataType == libknot.CtlTypeEnd {
-			debugLog("Zone status collection complete, processed %d responses", responseCount)
+			utils.DebugLog("Zone status collection complete, processed %d responses", responseCount)
 			break
 		}
 
@@ -531,16 +550,16 @@ func (c *KnotCollector) collectZoneStatusInfo(ctl *libknot.Ctl, ch chan<- promet
 					case 7: // refresh timer (appears as +1h28m44s format)
 						if seconds := c.convertStateTime(data.Data); seconds != nil {
 							sendMetrics(ch, zoneStatusRefreshDesc, *seconds, currentZone)
-							if debugMode {
-								debugLog("Zone status refresh timer: zone=%s, position=%d, value=%s, seconds=%f",
+							if utils.DebugMode {
+								utils.DebugLog("Zone status refresh timer: zone=%s, position=%d, value=%s, seconds=%f",
 									currentZone, responseIndex, data.Data, *seconds)
 							}
 						}
 					case 9: // expiration timer (appears as +27D23h58m44s format)
 						if seconds := c.convertStateTime(data.Data); seconds != nil {
 							sendMetrics(ch, zoneStatusExpirationDesc, *seconds, currentZone)
-							if debugMode {
-								debugLog("Zone status expiration timer: zone=%s, position=%d, value=%s, seconds=%f",
+							if utils.DebugMode {
+								utils.DebugLog("Zone status expiration timer: zone=%s, position=%d, value=%s, seconds=%f",
 									currentZone, responseIndex, data.Data, *seconds)
 							}
 						}
@@ -550,12 +569,12 @@ func (c *KnotCollector) collectZoneStatusInfo(ctl *libknot.Ctl, ch chan<- promet
 		}
 	}
 
-	debugLog("Zone status: processed %d items from %d responses", count, responseCount)
+	utils.DebugLog("Zone status: processed %d items from %d responses", count, responseCount)
 	return nil
 }
 
-func (c *KnotCollector) collectZoneStatistics(ctl *libknot.Ctl, ch chan<- prometheus.Metric) error {
-	debugLog("Collecting zone statistics...")
+func (c *KnotCollector) collectZoneStatistics(ctl KnotCtlInterface, ch chan<- prometheus.Metric) error {
+	utils.DebugLog("Collecting zone statistics...")
 	if err := ctl.SendCommand("zone-stats"); err != nil {
 		return err
 	}
@@ -570,14 +589,14 @@ func (c *KnotCollector) collectZoneStatistics(ctl *libknot.Ctl, ch chan<- promet
 		}
 
 		responseCount++
-		if debugMode && responseCount <= 10 { // Debug first 10 responses only in debug mode
-			debugLog("Zone stats response %d: type=%d, section='%s', item='%s', id='%s', zone='%s', data='%s'",
+		if utils.DebugMode && responseCount <= 10 { // Debug first 10 responses only in debug mode
+			utils.DebugLog("Zone stats response %d: type=%d, section='%s', item='%s', id='%s', zone='%s', data='%s'",
 				responseCount, dataType, data.Section, data.Item, data.ID, data.Zone, data.Data)
 		}
 
 		// Break on BLOCK (end of response) or END (end of connection)
 		if dataType == libknot.CtlTypeBlock || dataType == libknot.CtlTypeEnd {
-			debugLog("Zone stats collection complete, processed %d responses", responseCount)
+			utils.DebugLog("Zone stats collection complete, processed %d responses", responseCount)
 			break
 		}
 
@@ -588,8 +607,8 @@ func (c *KnotCollector) collectZoneStatistics(ctl *libknot.Ctl, ch chan<- promet
 			statSubtype := data.ID
 
 			if value, err := strconv.ParseFloat(data.Data, 64); err == nil {
-				if debugMode && count <= 15 {
-					debugLog("Zone stat: type=%d, zone=%s, section=%s, item=%s, id=%s, value=%s",
+				if utils.DebugMode && count <= 15 {
+					utils.DebugLog("Zone stat: type=%d, zone=%s, section=%s, item=%s, id=%s, value=%s",
 						dataType, data.Zone, data.Section, statType, statSubtype, data.Data)
 				}
 
@@ -601,21 +620,21 @@ func (c *KnotCollector) collectZoneStatistics(ctl *libknot.Ctl, ch chan<- promet
 					statSubtype,  // type label (using ID field)
 				)
 			} else {
-				debugLog("Failed to parse zone stat value '%s' for zone '%s', item '%s'", data.Data, data.Zone, data.Item)
+				utils.DebugLog("Failed to parse zone stat value '%s' for zone '%s', item '%s'", data.Data, data.Zone, data.Item)
 			}
 		} else if dataType == libknot.CtlTypeData || dataType == libknot.CtlTypeExtra {
 			// Debug cases where we skip metrics
-			debugLog("Skipped zone stat: type=%d, zone='%s', item='%s', data='%s' (missing required fields)",
+			utils.DebugLog("Skipped zone stat: type=%d, zone='%s', item='%s', data='%s' (missing required fields)",
 				dataType, data.Zone, data.Item, data.Data)
 		}
 	}
 
-	debugLog("Zone stats: collected %d statistics from %d responses", count, responseCount)
+	utils.DebugLog("Zone stats: collected %d statistics from %d responses", count, responseCount)
 	return nil
 }
 
-func (c *KnotCollector) collectZoneTimerInfo(ctl *libknot.Ctl, ch chan<- prometheus.Metric) error {
-	debugLog("Collecting zone timers from SOA records...")
+func (c *KnotCollector) collectZoneTimerInfo(ctl KnotCtlInterface, ch chan<- prometheus.Metric) error {
+	utils.DebugLog("Collecting zone timers from SOA records...")
 
 	// Use zone-read with SOA type to get only SOA records
 	if err := ctl.SendCommandWithType("zone-read", "SOA"); err != nil {
@@ -632,14 +651,14 @@ func (c *KnotCollector) collectZoneTimerInfo(ctl *libknot.Ctl, ch chan<- prometh
 		}
 
 		count++
-		if debugMode && count <= 10 { // Debug first 10 records only in debug mode
-			debugLog("Zone timer response %d: type=%d, zone='%s', data='%s'",
+		if utils.DebugMode && count <= 10 { // Debug first 10 records only in debug mode
+			utils.DebugLog("Zone timer response %d: type=%d, zone='%s', data='%s'",
 				count, dataType, data.Zone, data.Data)
 		}
 
 		// Break on BLOCK (end of response) or END (end of connection)
 		if dataType == libknot.CtlTypeBlock || dataType == libknot.CtlTypeEnd {
-			debugLog("Zone timers collection complete, processed %d responses", count)
+			utils.DebugLog("Zone timers collection complete, processed %d responses", count)
 			break
 		}
 
@@ -647,8 +666,8 @@ func (c *KnotCollector) collectZoneTimerInfo(ctl *libknot.Ctl, ch chan<- prometh
 		if dataType == libknot.CtlTypeData && data.Zone != "" {
 
 			soaFields := strings.Fields(data.Data)
-			if debugMode && count <= 5 {
-				debugLog("Zone %s: parsed %d fields: %v", data.Zone, len(soaFields), soaFields)
+			if utils.DebugMode && count <= 5 {
+				utils.DebugLog("Zone %s: parsed %d fields: %v", data.Zone, len(soaFields), soaFields)
 			}
 
 			// SOA format: "primary admin serial refresh retry expiration minimum"
@@ -682,27 +701,27 @@ func (c *KnotCollector) collectZoneTimerInfo(ctl *libknot.Ctl, ch chan<- prometh
 						// Expiration timer (index 5 in SOA, index 3 in our array)
 						sendMetrics(ch, zoneExpirationDesc, float64(numericValues[3]), data.Zone)
 					} else {
-						if debugMode && count <= 5 {
-							debugLog("Zone %s: numeric validation failed", data.Zone)
+						if utils.DebugMode && count <= 5 {
+							utils.DebugLog("Zone %s: numeric validation failed", data.Zone)
 						}
 					}
 				} else {
-					if debugMode && count <= 5 {
-						debugLog("Zone %s: format validation failed", data.Zone)
+					if utils.DebugMode && count <= 5 {
+						utils.DebugLog("Zone %s: format validation failed", data.Zone)
 					}
 				}
 			} else {
-				if debugMode && count <= 5 {
-					debugLog("Zone %s: wrong field count (%d)", data.Zone, len(soaFields))
+				if utils.DebugMode && count <= 5 {
+					utils.DebugLog("Zone %s: wrong field count (%d)", data.Zone, len(soaFields))
 				}
 			}
 		}
 	}
 
 	if count >= maxResponses {
-		debugLog("Zone timers: stopped at maximum responses (%d)", maxResponses)
+		utils.DebugLog("Zone timers: stopped at maximum responses (%d)", maxResponses)
 	}
 
-	debugLog("Zone timers: processed SOA records for %d zones", count)
+	utils.DebugLog("Zone timers: processed SOA records for %d zones", count)
 	return nil
 }
