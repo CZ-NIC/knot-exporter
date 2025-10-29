@@ -158,16 +158,3 @@ help:
 	@echo "  version     - Show version information"
 	@echo "  dev         - Build development version with debug symbols"
 	@echo "  help        - Show this help"
-
-# GoReleaser targets
-.PHONY: release-snapshot
-release-snapshot:
-	goreleaser release --snapshot --rm-dist
-
-.PHONY: release-check
-release-check:
-	goreleaser check
-
-.PHONY: release
-release:
-	goreleaser release --clean

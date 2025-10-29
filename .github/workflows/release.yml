@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  goreleaser:
+  build-amd64:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -17,22 +17,111 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libknot-dev pkg-config upx-ucl
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
           cache: true
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libknot-dev pkg-config upx-ucl
+
+      - name: Build for amd64
+        env:
+          CGO_ENABLED: 1
+        run: |
+          go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.gitCommit=${{ github.sha }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o knot-exporter ./cmd/knot-exporter
+
+      - name: Create archive
+        run: |
+          mkdir -p dist
+          tar czf dist/knot-exporter_Linux_amd64.tar.gz knot-exporter README.md
+
+      - name: Generate checksum
+        run: |
+          cd dist
+          sha256sum knot-exporter_Linux_amd64.tar.gz > knot-exporter_Linux_amd64.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
+          name: knot-exporter-amd64
+          path: dist/*
+
+  build-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ARM64 in Docker
+        run: |
+          docker run --rm --platform linux/arm64 \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            -e CGO_ENABLED=1 \
+            arm64v8/golang:1.23-bookworm \
+            bash -c "
+              apt-get update && \
+              apt-get install -y libknot-dev pkg-config && \
+              go build -buildvcs=false -trimpath -ldflags='-s -w -X main.version=${{ github.ref_name }} -X main.gitCommit=${{ github.sha }} -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)' -o knot-exporter ./cmd/knot-exporter
+            "
+
+      - name: Create archive
+        run: |
+          mkdir -p dist
+          tar czf dist/knot-exporter_Linux_arm64.tar.gz knot-exporter README.md
+
+      - name: Generate checksum
+        run: |
+          cd dist
+          sha256sum knot-exporter_Linux_arm64.tar.gz > knot-exporter_Linux_arm64.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: knot-exporter-arm64
+          path: dist/*
+
+  create-release:
+    needs: [build-amd64, build-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find dist -name "*.tar.gz" -exec cp {} release/ \;
+          find dist -name "*.sha256" -exec cp {} release/ \;
+
+          # Create consolidated checksums file
+          cd release
+          cat *.sha256 > checksums.txt
+          ls -lh
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
