@@ -1,0 +1,65 @@
+version: 2
+
+project_name: knot-exporter
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: knot-exporter
+    main: ./cmd/knot-exporter
+    binary: knot-exporter
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.gitCommit={{.FullCommit}}
+      - -X main.buildTime={{.Date}}
+    flags:
+      - -trimpath
+
+archives:
+  - id: knot-exporter
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+release:
+  github:
+    owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
+    name: "{{ .ProjectName }}"
+  draft: false
+  prerelease: auto
+  mode: append
+  header: |
+    ## Release {{ .Tag }}
+  footer: |
+    ## Installation
+
+    Download the appropriate archive for your platform, extract it, and run the binary.
+
+    ## Checksums
+
+    All checksums are available in `checksums.txt`
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
