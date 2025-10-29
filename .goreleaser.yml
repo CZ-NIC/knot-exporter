@@ -12,7 +12,7 @@ builds:
       - linux
     goarch:
       - amd64
-      - arm64
+      # - arm64
     ldflags:
      - -s -w -X main.version={{.Version}} -X main.gitCommit={{.Commit}} -X main.buildTime={{.Date}}
     flags:
@@ -30,7 +30,6 @@ archives:
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
     files:
-      - LICENSE
       - README.md
 
 checksum:
