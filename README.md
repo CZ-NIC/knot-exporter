@@ -48,6 +48,12 @@ sudo yum install knot-devel pkg-config
 sudo dnf install knot-devel pkg-config
 ```
 
+## Binary releases
+
+Binary releases on GitHub are versioned in sync with appropriate Knot DNS
+release. Cross compatibility between mismatched versions of exporter and Knot
+daemon isn't guaranteed.
+
 ## Building
 
 ```bash
