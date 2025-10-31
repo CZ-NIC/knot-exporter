@@ -26,6 +26,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
+          sudo apt-get -y install apt-transport-https ca-certificates wget
+          sudo wget -O /usr/share/keyrings/cznic-labs-pkg.gpg https://pkg.labs.nic.cz/gpg
+          echo "deb [signed-by=/usr/share/keyrings/cznic-labs-pkg.gpg] https://pkg.labs.nic.cz/knot-dns noble main" | sudo tee /etc/apt/sources.list.d/cznic-labs-knot-dns.list
+          sudo apt-get update
           sudo apt-get install -y libknot-dev pkg-config
 
       - name: Install GoReleaser
