@@ -130,11 +130,15 @@ the detection of overflows, service restarts or other such events.
 
 ### Knot DNS Configuration
 
-Ensure your Knot DNS server has the control interface enabled in `/etc/knot/knot.conf`:
+Ensure your Knot DNS server has the control interface enabled and the [stats module](https://www.knot-dns.cz/docs/latest/html/modules.html#stats-query-statistics) loaded in `/etc/knot/knot.conf`:
 
 ```yaml
 control:
     listen: /run/knot/knot.sock
+
+template:
+  - id: default
+    global-module: mod-stats
 ```
 
 ### Systemd Service
