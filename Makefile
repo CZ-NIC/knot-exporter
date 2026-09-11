@@ -98,6 +98,8 @@ security:
 	@mkdir -p $(SECURITY_DIR)
 	@echo "Running security scan..."
 	@gosec -quiet -fmt=json -out=$(SECURITY_DIR)/gosec-output.json ./... || true
+	@# gosec -quiet writes no report at all when it finds nothing.
+	@[ -f $(SECURITY_DIR)/gosec-output.json ] || echo '{"Issues":[]}' > $(SECURITY_DIR)/gosec-output.json
 	@echo "Filtering results..."
 	@jq '.Issues = (.Issues | map(select((.file | contains(".cache/go-build") | not))))' \
 		$(SECURITY_DIR)/gosec-output.json > $(SECURITY_DIR)/filtered-output.json
